@@ -1,7 +1,7 @@
 <title>午饭小助手</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <style>
-/* 布局：顶部标签切换两个工具；转盘页左转盘右列表，记账页上余额下两栏，窄屏全部单列 */
+/* 布局：顶部标签切换两个工具；转盘页左转盘右列表；记账页：总余额 → 成员余额 → 记一笔 | 流水 → 操作记录，窄屏全部单列 */
 :root {
   --bg: #f4f3ef;
   --surface: #ffffff;
@@ -11,6 +11,7 @@
   --muted: #7d776f;
   --accent: #e0590f;
   --accent-strong: #c24a0a;
+  --accent-soft: #fde8db;
   --on-accent: #ffffff;
   --good: #2b8a3e;
   --bad: #d6336c;
@@ -21,24 +22,26 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #181715; --surface: #23211e; --surface-2: #2d2a26; --line: #38342f;
-    --fg: #eeebe6; --muted: #a39d94; --accent: #f07a35; --accent-strong: #ff8f4d; --on-accent: #1a1100;
+    --fg: #eeebe6; --muted: #a39d94; --accent: #f07a35; --accent-strong: #ff8f4d; --accent-soft: #3a2618; --on-accent: #1a1100;
     --good: #69db7c; --bad: #ff8fab; --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #181715; --surface: #23211e; --surface-2: #2d2a26; --line: #38342f;
-  --fg: #eeebe6; --muted: #a39d94; --accent: #f07a35; --accent-strong: #ff8f4d; --on-accent: #1a1100;
+  --fg: #eeebe6; --muted: #a39d94; --accent: #f07a35; --accent-strong: #ff8f4d; --accent-soft: #3a2618; --on-accent: #1a1100;
   --good: #69db7c; --bad: #ff8fab; --shadow: none; color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 20px 40px;
 }
-.wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+.stack { display: flex; flex-direction: column; gap: 18px; }
 
 header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 h1 { margin: 0; font-size: 24px; letter-spacing: .02em; text-wrap: balance; }
@@ -54,7 +57,7 @@ h2 { margin: 0; font-size: 17px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
 
 button { font: inherit; cursor: pointer; color: inherit; }
-button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .btn { background: var(--accent); color: var(--on-accent); border: 0; border-radius: 10px; padding: 9px 16px; font-weight: 600; }
 .btn:hover { background: var(--accent-strong); }
 .btn:disabled { opacity: .45; cursor: not-allowed; }
@@ -62,18 +65,19 @@ button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px 
 .ghost { background: var(--surface-2); border: 0; border-radius: 8px; padding: 6px 11px; font-size: 13px; }
 .ghost:hover { background: var(--line); }
 .link { background: none; border: 0; padding: 0; color: var(--muted); font-size: 13px; }
-.link:hover { color: var(--bad); }
-.link.armed, .del.armed { color: var(--bad); font-weight: 600; }
+.link:hover { color: var(--accent); }
+.link.danger:hover { color: var(--bad); }
+.armed { color: var(--bad) !important; font-weight: 600; }
 
-input[type="text"], input[type="number"], input[type="date"], textarea {
+input[type="text"], input[type="number"], input[type="date"], select, textarea {
   width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 10px; font: inherit;
   background: var(--bg); color: var(--fg);
 }
-input:focus, textarea:focus { border-color: var(--accent); outline: none; }
-.row { display: flex; gap: 8px; }
-.row > input { flex: 1; min-width: 0; }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); outline: none; }
+input[readonly] { color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; }
+.row > input, .row > select { flex: 1; min-width: 0; }
 .hint { color: var(--muted); font-size: 13px; margin: 6px 0 0; }
-
 .panel[hidden] { display: none; }
 
 /* 转盘 */
@@ -100,39 +104,79 @@ input:focus, textarea:focus { border-color: var(--accent); outline: none; }
 .del:hover { color: var(--bad); }
 .empty { color: var(--muted); font-size: 13px; padding: 14px 4px; }
 
-/* 记账 */
+/* 总余额 */
 .balance { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 22px 18px; }
 .balance .label { color: var(--muted); font-size: 13px; letter-spacing: .08em; }
 .balance .amount { font-family: var(--font-num); font-size: 44px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.15; }
-.balance .amount.neg { color: var(--bad); }
+.neg { color: var(--bad); }
+.pos { color: var(--good); }
 .pill { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
 .pill.warn { color: var(--bad); }
 .stats { display: flex; gap: 8px 18px; flex-wrap: wrap; justify-content: center; font-size: 13px; color: var(--muted); margin-top: 8px; }
 .stats b { color: var(--fg); font-variant-numeric: tabular-nums; }
 
-.ledger-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr); gap: 18px; align-items: start; }
+/* 成员 */
+.members { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.member { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; background: var(--bg); }
+.member .m-name { font-weight: 600; overflow-wrap: anywhere; }
+.member .m-bal { font-family: var(--font-num); font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.member .m-detail { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.member .m-actions { display: flex; gap: 10px; margin-top: 4px; }
+.member.archived { opacity: .7; }
+.member input { padding: 5px 8px; font-size: 14px; }
+.add-member { margin-top: 12px; max-width: 420px; }
+
+/* 记账表单 */
+.ledger-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 18px; align-items: start; }
 .tx-form { display: flex; flex-direction: column; gap: 12px; }
-.tx-form label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+.tx-form label.field, .field-block { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.field-head { display: flex; align-items: center; gap: 12px; }
 .seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--surface-2); border-radius: 10px; padding: 3px; }
 .seg input { position: absolute; opacity: 0; pointer-events: none; }
 .seg label { text-align: center; padding: 7px 4px; border-radius: 8px; cursor: pointer; font-size: 14px; color: var(--muted); }
+.seg.sm label { padding: 4px; font-size: 13px; }
 .seg input:checked + span { color: var(--fg); font-weight: 600; }
 .seg label:has(input:checked) { background: var(--surface); box-shadow: var(--shadow); }
 .seg input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { position: relative; }
+.chip input { position: absolute; opacity: 0; pointer-events: none; }
+.chip span { display: inline-block; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); cursor: pointer; font-size: 14px; }
+.chip input:checked + span { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); font-weight: 600; }
+.chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
+.custom-rows { display: flex; flex-direction: column; gap: 6px; }
+.custom-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 8px; align-items: center; color: var(--fg); font-size: 14px; }
+.custom-row span { overflow-wrap: anywhere; }
 .quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.edit-banner { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--fg); font-size: 14px; }
 
-.tx-list { max-height: 520px; }
-.tx-list li.day { background: var(--surface-2); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--muted); border-bottom: 0; margin-top: 6px; }
-.tx-main { min-width: 0; display: flex; flex-direction: column; }
+/* 流水 */
+.filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; font-size: 13px; color: var(--muted); }
+.filters select { width: auto; padding: 5px 8px; font-size: 13px; }
+.filters label { display: inline-flex; gap: 4px; align-items: center; cursor: pointer; }
+.tx-list { max-height: 560px; }
+.tx-list li { align-items: flex-start; }
+.tx-list li.day { background: var(--surface-2); border-radius: 6px; padding: 4px 8px; font-size: 12px; color: var(--muted); border-bottom: 0; margin-top: 6px; align-items: center; }
+.tx-main { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .tx-note { overflow-wrap: anywhere; }
-.tx-by { font-size: 12px; color: var(--muted); }
-.tx-right { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.tx-sub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.tx-right { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; flex-shrink: 0; }
+.tx-actions { display: flex; gap: 10px; }
 .amt { font-variant-numeric: tabular-nums; font-weight: 600; }
 .amt.expense { color: var(--bad); }
 .amt.deposit { color: var(--good); }
+.amt-sub { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+li.deleted .tx-note, li.deleted .amt { text-decoration: line-through; color: var(--muted); }
+
+/* 操作记录 */
+.log { list-style: none; margin: 8px 0 0; padding: 0; max-height: 320px; overflow-y: auto; font-size: 13px; }
+.log li { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 8px; padding: 6px 2px; border-bottom: 1px solid var(--line); }
+.log time { color: var(--muted); font-variant-numeric: tabular-nums; }
+.log .who { font-weight: 600; }
+.log .act-delete { color: var(--bad); }
 
 details.backup { margin-top: 14px; font-size: 13px; color: var(--muted); }
-details.backup summary { cursor: pointer; }
+details summary { cursor: pointer; }
 .backup-body { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
 .backup-body textarea { min-height: 90px; font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
 .confirm-box { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px; border-radius: 10px; background: var(--surface-2); color: var(--fg); }
@@ -143,9 +187,10 @@ details.backup summary { cursor: pointer; }
   max-width: calc(100% - 32px);
 }
 
-@media (max-width: 720px) {
+@media (max-width: 760px) {
   .wheel-layout, .ledger-layout { grid-template-columns: minmax(0, 1fr); }
   .balance .amount { font-size: 36px; }
+  .log li { grid-template-columns: minmax(0, 1fr); gap: 0; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 </style>
@@ -184,65 +229,119 @@ details.backup summary { cursor: pointer; }
         </form>
         <p class="hint">一次可以加多个，用逗号、顿号或换行隔开。大家看到的是同一份列表。</p>
         <ul id="restaurantList" class="list"></ul>
-        <button id="clearRestaurants" class="link" hidden>清空列表</button>
+        <button id="clearRestaurants" class="link danger" hidden>清空列表</button>
       </div>
     </div>
   </section>
 
   <!-- 记账 -->
-  <section id="ledger" class="panel" role="tabpanel" hidden>
-    <div style="display:flex;flex-direction:column;gap:18px">
-      <div class="card balance">
-        <span class="label">饭钱余额（CAD）</span>
-        <span id="balance" class="amount">$0.00</span>
-        <span id="balanceSub" class="pill">还没有记录</span>
-        <div id="stats" class="stats"></div>
+  <section id="ledger" class="panel stack" role="tabpanel" hidden>
+    <div class="card balance">
+      <span class="label">饭钱总余额（CAD）</span>
+      <span id="balance" class="amount">$0.00</span>
+      <span id="balanceSub" class="pill">还没有记录</span>
+      <div id="stats" class="stats"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>成员余额</h2>
+        <span class="hint" style="margin:0">余额 = 存入 − 吃掉的；负数表示该补钱了</span>
       </div>
+      <div id="members" class="members"></div>
+      <p id="membersEmpty" class="empty" hidden>还没有成员。先把一起吃饭的同事加进来，记账时就能按人分摊。</p>
+      <form id="memberForm" class="row add-member">
+        <input id="memberInput" type="text" maxlength="20" placeholder="添加成员，例如：小王" autocomplete="off">
+        <button type="submit" class="btn" id="addMemberBtn">添加成员</button>
+      </form>
+      <details id="archivedBox" class="backup" hidden>
+        <summary id="archivedSummary">已停用的成员</summary>
+        <div id="archivedMembers" class="members" style="margin-top:10px"></div>
+      </details>
+    </div>
 
-      <div class="ledger-layout">
-        <div class="card">
-          <h2 style="margin-bottom:12px">记一笔</h2>
-          <form id="txForm" class="tx-form">
-            <div class="seg" role="radiogroup" aria-label="类型">
-              <label><input type="radio" name="txType" id="typeExpense" value="expense" checked><span>消费（扣除）</span></label>
-              <label><input type="radio" name="txType" id="typeDeposit" value="deposit"><span>存入（充值）</span></label>
-            </div>
-            <label class="field">金额（加元 CAD）
-              <input id="txAmount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="例如 18.50" required>
-            </label>
-            <label class="field">日期
-              <input id="txDate" type="date" required>
-            </label>
-            <label class="field">备注
-              <input id="txNote" type="text" list="restaurantOptions" maxlength="50" placeholder="饭店名，或谁存的钱">
-              <datalist id="restaurantOptions"></datalist>
-            </label>
-            <div id="quickNotes" class="quick"></div>
-            <button type="submit" class="btn" id="saveTx">保存</button>
-          </form>
-        </div>
-
-        <div class="card">
-          <div class="card-head">
-            <h2>流水记录</h2>
+    <div class="ledger-layout">
+      <div class="card">
+        <h2 id="formTitle" style="margin-bottom:12px">记一笔</h2>
+        <form id="txForm" class="tx-form">
+          <div id="editBanner" class="edit-banner" hidden>
+            <span>正在修改一条记录，保存后会留下修改记录</span>
+            <button type="button" id="cancelEdit" class="ghost">取消修改</button>
           </div>
-          <ul id="txList" class="list tx-list"></ul>
-          <p id="txEmpty" class="empty">还没有记录。先记一笔「存入」，再记每天的消费。</p>
+          <div class="seg" role="radiogroup" aria-label="类型">
+            <label><input type="radio" name="txType" id="typeExpense" value="expense" checked><span>消费（扣除）</span></label>
+            <label><input type="radio" name="txType" id="typeDeposit" value="deposit"><span>存入（充值）</span></label>
+          </div>
 
-          <details class="backup">
-            <summary>备份与导入</summary>
-            <div class="backup-body">
-              <div class="row">
-                <button type="button" id="copyBackup" class="ghost">复制全部数据（JSON）</button>
-                <label class="ghost" style="cursor:pointer">导入备份文件<input id="importInput" type="file" accept="application/json,.json" hidden></label>
-              </div>
-              <textarea id="backupText" readonly hidden aria-label="备份数据"></textarea>
-              <div id="importConfirm" class="confirm-box" hidden></div>
-              <p class="hint" style="margin:0">导入会把文件里的饭店和流水追加到共享数据，不会删除现有记录。可以导入旧版本地网页导出的备份。</p>
+          <div id="depositFields" class="field-block" hidden>
+            <label class="field">谁存的
+              <select id="txMember"></select>
+            </label>
+          </div>
+
+          <div id="expenseFields" class="field-block">
+            <div class="field-head">
+              <span>谁吃了</span>
+              <button type="button" class="link" id="selAll">全选</button>
+              <button type="button" class="link" id="selNone">清空</button>
             </div>
-          </details>
-        </div>
+            <div id="participants" class="chips"></div>
+            <div class="seg sm" role="radiogroup" aria-label="分摊方式">
+              <label><input type="radio" name="splitMode" id="splitEqual" value="equal" checked><span>平均分摊</span></label>
+              <label><input type="radio" name="splitMode" id="splitCustom" value="custom"><span>各付各的</span></label>
+            </div>
+            <div id="customRows" class="custom-rows" hidden></div>
+          </div>
+
+          <label class="field"><span id="amountLabel">总金额（加元 CAD）</span>
+            <input id="txAmount" type="number" step="0.01" min="0.01" inputmode="decimal" placeholder="例如 18.50">
+          </label>
+          <p id="splitPreview" class="hint" style="margin:-6px 0 0"></p>
+          <label class="field">日期
+            <input id="txDate" type="date" required>
+          </label>
+          <label class="field">备注
+            <input id="txNote" type="text" list="restaurantOptions" maxlength="50" placeholder="饭店名，或其他说明">
+            <datalist id="restaurantOptions"></datalist>
+          </label>
+          <div id="quickNotes" class="quick"></div>
+          <button type="submit" class="btn" id="saveTx">保存</button>
+        </form>
       </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h2>流水记录</h2>
+          <div class="filters">
+            <select id="filterMember" aria-label="按成员筛选"><option value="">全部成员</option></select>
+            <label><input type="checkbox" id="showDeleted"> 显示已删除</label>
+          </div>
+        </div>
+        <ul id="txList" class="list tx-list"></ul>
+        <p id="txEmpty" class="empty">还没有记录。先记一笔「存入」，再记每天的消费。</p>
+
+        <details class="backup">
+          <summary>备份与导入</summary>
+          <div class="backup-body">
+            <div class="row" style="flex-wrap:wrap">
+              <button type="button" id="copyBackup" class="ghost">复制全部数据（JSON）</button>
+              <label class="ghost" style="cursor:pointer">导入备份文件<input id="importInput" type="file" accept="application/json,.json" hidden></label>
+            </div>
+            <textarea id="backupText" readonly hidden aria-label="备份数据"></textarea>
+            <div id="importConfirm" class="confirm-box" hidden></div>
+            <p class="hint" style="margin:0">导入会把文件里的成员、饭店和流水追加到共享数据，不会删除现有记录。也能导入单机版导出的备份。</p>
+          </div>
+        </details>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>操作记录</h2>
+        <span class="hint" style="margin:0">最近 50 条：谁在什么时候加、改、删了什么</span>
+      </div>
+      <ul id="logList" class="log"></ul>
+      <p id="logEmpty" class="empty">还没有操作记录。</p>
     </div>
   </section>
 </div>
@@ -259,7 +358,17 @@ details.backup summary { cursor: pointer; }
   const fmt = (c) => (c < 0 ? '-' : '') + '$' + (Math.abs(c) / 100).toFixed(2);
   const pad = (n) => String(n).padStart(2, '0');
   const today = () => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+
+  // 平均分摊：除不尽的几分钱依次多分给前几个人，保证合计等于总额
+  function splitEqual(total, ids) {
+    const n = ids.length, base = Math.floor(total / n);
+    let rem = total - base * n;
+    const out = {};
+    ids.forEach((id) => { out[id] = base + (rem > 0 ? 1 : 0); if (rem > 0) rem--; });
+    return out;
+  }
 
   let toastTimer;
   function toast(msg) {
@@ -269,7 +378,6 @@ details.backup summary { cursor: pointer; }
   function setStatus(msg, warn) {
     const s = $('status'); s.hidden = !msg; s.textContent = msg || ''; s.classList.toggle('warn', !!warn);
   }
-
   // 两次点击确认（页面里不能用 confirm 弹窗）
   function armOrRun(btn, label, run) {
     if (btn.classList.contains('armed')) { btn.classList.remove('armed'); run(); return; }
@@ -279,15 +387,30 @@ details.backup summary { cursor: pointer; }
   }
 
   // ---------- 状态 ----------
-  let db = null, user = null, myId = null, canWrite = true;
-  let restaurants = [], txs = [], pick = null;
-  const loaded = { r: false, t: false };
+  let db = null, user = null, myId = null, isAdmin = false, canWrite = true;
+  let restaurants = [], members = [], txs = [], logs = [], pick = null;
+  const loaded = { r: false, m: false, t: false, l: false };
   let spinning = false;
+  let curDay = today();
+
+  const memberById = (id) => members.find((m) => m.id === id);
+  const memberName = (id) => { const m = memberById(id); return m ? m.name : '未知成员'; };
+  const activeMembers = () => members.filter((m) => m.active !== false);
+  const canManage = (t) => canWrite && (isAdmin || (myId && t.by === myId));
+
+  async function names(ids) {
+    const list = [...new Set(ids.filter(Boolean))];
+    if (!user || !list.length) return {};
+    const ps = await user.profiles(list);
+    const out = {};
+    list.forEach((id) => { out[id] = (ps[id] && ps[id].name) || ''; });
+    return out;
+  }
 
   function setWritable(ok) {
     canWrite = ok;
-    ['addBtn', 'saveTx', 'restaurantInput', 'txAmount', 'txNote', 'txDate'].forEach((id) => { $(id).disabled = !ok; });
-    renderRestaurants(); renderLedger();
+    ['addBtn', 'saveTx', 'restaurantInput', 'txAmount', 'txNote', 'txDate', 'memberInput', 'addMemberBtn', 'txMember'].forEach((id) => { $(id).disabled = !ok; });
+    renderAll();
   }
 
   async function write(fn) {
@@ -299,9 +422,15 @@ details.backup summary { cursor: pointer; }
       else if (code === 'quota_exceeded') toast('存储已满：' + (e.message || '请删除一些旧记录'));
       else if (code === 'resource_exhausted') toast('操作太快了，稍等一下再试');
       else if (code === 'unavailable') toast('网络不稳定，没保存成功，请再试一次');
-      else toast('保存失败：' + (e && e.message || code || '未知错误'));
+      else toast('保存失败：' + ((e && e.message) || code || '未知错误'));
       return false;
     }
+  }
+
+  // 操作记录：失败也不影响主操作
+  function addLog(action, summary, txId) {
+    if (!db) return;
+    db.collection('log').add({ at: Date.now(), by: myId, action, summary: String(summary).slice(0, 200), txId: txId || null }).catch(() => {});
   }
 
   // ---------- 标签 ----------
@@ -319,9 +448,8 @@ details.backup summary { cursor: pointer; }
   const canvas = $('wheelCanvas'), ctx = canvas.getContext('2d');
   const TAU = Math.PI * 2, POINTER = -Math.PI / 2;
   let rotation = 0;
-  let wheelItems = []; // 转动期间锁定的列表快照
-
-  function cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+  let wheelItems = [];
+  const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
   function drawWheel() {
     const list = spinning ? wheelItems : restaurants;
@@ -340,7 +468,6 @@ details.backup summary { cursor: pointer; }
       ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, r, start, start + seg); ctx.closePath();
       ctx.fillStyle = colorFor(i, n); ctx.fill();
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke();
-
       const mid = start + seg / 2, flip = Math.cos(mid) < 0;
       ctx.save(); ctx.translate(cx, cy); ctx.rotate(flip ? mid + Math.PI : mid);
       ctx.textAlign = flip ? 'left' : 'right'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#26231f';
@@ -374,14 +501,13 @@ details.backup summary { cursor: pointer; }
   $('restaurantForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = $('restaurantInput');
-    const names = input.value.split(/[,，、;；\n]+/).map((s) => s.trim().slice(0, 30)).filter(Boolean);
+    const list = input.value.split(/[,，、;；\n]+/).map((s) => s.trim().slice(0, 30)).filter(Boolean);
     const existing = new Set(restaurants.map((r) => r.name));
-    const fresh = [...new Set(names)].filter((nm) => !existing.has(nm));
+    const fresh = [...new Set(list)].filter((nm) => !existing.has(nm));
     input.value = '';
-    if (!fresh.length) { if (names.length) toast('这些饭店已经在列表里了'); return; }
+    if (!fresh.length) { if (list.length) toast('这些饭店已经在列表里了'); return; }
     for (const name of fresh) {
-      const ok = await write(() => db.collection('restaurants').add({ name, createdAt: Date.now(), by: myId }));
-      if (!ok) break;
+      if (!(await write(() => db.collection('restaurants').add({ name, createdAt: Date.now(), by: myId })))) break;
     }
   });
   $('restaurantInput').addEventListener('paste', (e) => {
@@ -414,7 +540,6 @@ details.backup summary { cursor: pointer; }
     let endRot = POINTER - target * seg - jitter;
     while (endRot < startRot + TAU * 6) endRot += TAU;
     const duration = reduceMotion ? 600 : 4200, t0 = performance.now();
-
     function frame(now) {
       const t = Math.min(1, (now - t0) / duration);
       rotation = startRot + (endRot - startRot) * easeOut(t);
@@ -432,45 +557,345 @@ details.backup summary { cursor: pointer; }
   async function renderPick() {
     const el = $('todayPick');
     if (!pick) { el.innerHTML = loaded.r ? '今天还没人抽过' : ''; return; }
-    let who = '';
-    if (pick.by && user) { const ps = await user.profiles([pick.by]); who = ps[pick.by] && ps[pick.by].name; }
-    const time = new Date(pick.at); const hm = `${pad(time.getHours())}:${pad(time.getMinutes())}`;
-    el.innerHTML = `今日已抽中 <b>${esc(pick.name)}</b>（${esc(who || '有人')} ${hm} 抽的）
+    const nm = await names([pick.by]);
+    const time = new Date(pick.at), hm = `${pad(time.getHours())}:${pad(time.getMinutes())}`;
+    el.innerHTML = `今日已抽中 <b>${esc(pick.name)}</b>（${esc(nm[pick.by] || '有人')} ${hm} 抽的）
       ${canWrite ? ` · <button type="button" class="link" id="recordPick" style="color:var(--accent)">记这顿饭的消费</button>` : ''}`;
     const b = $('recordPick');
     if (b) b.addEventListener('click', () => {
-      switchTab('ledger'); $('typeExpense').checked = true; $('txNote').value = pick.name; $('txDate').value = today(); $('txAmount').focus();
+      cancelEdit(); switchTab('ledger');
+      $('typeExpense').checked = true; updateTypeFields();
+      $('txNote').value = pick.name; $('txDate').value = today(); dateDirty = false; $('txAmount').focus();
     });
   }
 
-  // ---------- 记账 ----------
+  // 今日抽中：按日期订阅，跨天时重新订阅
+  let unsubPick = null;
+  function subscribePick() {
+    if (unsubPick) unsubPick();
+    pick = null; renderPick();
+    unsubPick = db.doc('picks/' + curDay).onSnapshot((d) => { pick = d.exists ? d.data() : null; renderPick(); }, () => {});
+  }
+
+  // ---------- 成员 ----------
+  function computeBalances() {
+    const per = {};
+    members.forEach((m) => { per[m.id] = { dep: 0, spent: 0 }; });
+    let unassigned = 0;
+    for (const t of txs) {
+      if (t.deleted) continue;
+      if (t.type === 'deposit') {
+        if (t.member && per[t.member]) per[t.member].dep += t.amount; else unassigned += t.amount;
+      } else {
+        const shares = t.shares || {};
+        const keys = Object.keys(shares);
+        if (!keys.length) { unassigned -= t.amount; continue; }
+        for (const k of keys) { if (per[k]) per[k].spent += shares[k]; else unassigned -= shares[k]; }
+      }
+    }
+    return { per, unassigned };
+  }
+
+  let renamingId = null;
+  function memberCard(m, b) {
+    const bal = b.dep - b.spent;
+    if (renamingId === m.id) {
+      return `<div class="member"><form class="row" data-rename="${esc(m.id)}">
+        <input type="text" maxlength="20" value="${esc(m.name)}" aria-label="新名字"><button class="ghost" type="submit">保存</button></form>
+        <div class="m-actions"><button type="button" class="link" data-act="rename-cancel">取消</button></div></div>`;
+    }
+    const archived = m.active === false;
+    return `<div class="member${archived ? ' archived' : ''}">
+      <span class="m-name">${esc(m.name)}</span>
+      <span class="m-bal ${bal < 0 ? 'neg' : ''}">${fmt(bal)}</span>
+      <span class="m-detail">存 ${fmt(b.dep)} · 吃 ${fmt(b.spent)}</span>
+      ${canWrite ? `<div class="m-actions">
+        <button type="button" class="link" data-act="rename" data-id="${esc(m.id)}">改名</button>
+        ${archived ? `<button type="button" class="link" data-act="restore-member" data-id="${esc(m.id)}">恢复</button>`
+                   : `<button type="button" class="link danger" data-act="archive" data-id="${esc(m.id)}">停用</button>`}
+      </div>` : ''}
+    </div>`;
+  }
+
+  function renderMembers() {
+    const { per } = computeBalances();
+    const act = activeMembers(), arch = members.filter((m) => m.active === false);
+    $('members').innerHTML = !loaded.m ? '<p class="empty">加载中……</p>' : act.map((m) => memberCard(m, per[m.id])).join('');
+    $('membersEmpty').hidden = !loaded.m || act.length > 0;
+    $('archivedBox').hidden = !arch.length;
+    $('archivedSummary').textContent = `已停用的成员（${arch.length}）`;
+    $('archivedMembers').innerHTML = arch.map((m) => memberCard(m, per[m.id])).join('');
+    $('memberForm').hidden = !canWrite;
+    const f = $('renameInput') || document.querySelector('[data-rename] input');
+    if (f) { f.focus(); f.select(); }
+
+    // 存入人下拉、筛选下拉
+    const cur = $('txMember').value;
+    const opts = act.slice();
+    if (cur && !opts.find((m) => m.id === cur) && memberById(cur)) opts.push(memberById(cur));
+    $('txMember').innerHTML = opts.length ? '<option value="">请选择</option>' + opts.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}</option>`).join('')
+      : '<option value="">（还没有成员）</option>';
+    $('txMember').value = cur && opts.find((m) => m.id === cur) ? cur : '';
+    const fcur = $('filterMember').value;
+    $('filterMember').innerHTML = '<option value="">全部成员</option>' + members.map((m) => `<option value="${esc(m.id)}">${esc(m.name)}${m.active === false ? '（已停用）' : ''}</option>`).join('');
+    $('filterMember').value = memberById(fcur) ? fcur : '';
+  }
+
+  $('memberForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('memberInput').value.trim().slice(0, 20);
+    if (!name) return;
+    if (members.some((m) => m.name === name)) { toast(`已经有「${name}」了`); return; }
+    $('memberInput').value = '';
+    const ref = db.collection('members').doc();
+    if (await write(() => ref.set({ name, active: true, createdAt: Date.now(), by: myId }))) {
+      selected.add(ref.id);
+      addLog('member-add', `添加成员 ${name}`);
+    }
+  });
+
+  function onMemberClick(e) {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const id = b.dataset.id, m = id && memberById(id);
+    if (b.dataset.act === 'rename') { renamingId = id; renderMembers(); return; }
+    if (b.dataset.act === 'rename-cancel') { renamingId = null; renderMembers(); return; }
+    if (!m) return;
+    if (b.dataset.act === 'archive') {
+      armOrRun(b, '确认停用', async () => {
+        if (await write(() => db.doc('members/' + id).update({ active: false }))) { selected.delete(id); addLog('member-archive', `停用成员 ${m.name}`); }
+      });
+    }
+    if (b.dataset.act === 'restore-member') {
+      write(() => db.doc('members/' + id).update({ active: true })).then((ok) => ok && addLog('member-restore', `恢复成员 ${m.name}`));
+    }
+  }
+  async function onMemberRename(e) {
+    const f = e.target.closest('[data-rename]'); if (!f) return;
+    e.preventDefault();
+    const id = f.dataset.rename, m = memberById(id);
+    const name = f.querySelector('input').value.trim().slice(0, 20);
+    renamingId = null;
+    if (!m || !name || name === m.name) { renderMembers(); return; }
+    if (members.some((x) => x.name === name && x.id !== id)) { toast(`已经有「${name}」了`); renderMembers(); return; }
+    if (await write(() => db.doc('members/' + id).update({ name }))) addLog('member-rename', `成员改名：${m.name} → ${name}`);
+  }
+  ['members', 'archivedMembers'].forEach((id) => {
+    $(id).addEventListener('click', onMemberClick);
+    $(id).addEventListener('submit', onMemberRename);
+  });
+
+  // ---------- 记账表单 ----------
+  let editingId = null;
+  let dateDirty = false;
+  let selected = new Set();      // 当前勾选的吃饭成员
+  let selectionInit = false;
+  const customAmounts = {};      // memberId -> 字符串金额（各付各的）
+
+  const txType = () => document.querySelector('input[name="txType"]:checked').value;
+  const splitMode = () => document.querySelector('input[name="splitMode"]:checked').value;
+
+  function updateTypeFields() {
+    const dep = txType() === 'deposit';
+    $('depositFields').hidden = !dep;
+    $('expenseFields').hidden = dep;
+    const custom = !dep && splitMode() === 'custom' && activeMembers().length > 0;
+    $('txAmount').readOnly = custom;
+    $('amountLabel').textContent = dep ? '存入金额（加元 CAD）' : custom ? '总金额（自动合计）' : '总金额（加元 CAD）';
+    renderParticipants();
+  }
+
+  function renderParticipants() {
+    const act = activeMembers();
+    // 修改旧记录时，已停用的成员也要显示出来
+    const extra = [...selected].filter((id) => !act.find((m) => m.id === id) && memberById(id)).map(memberById);
+    const list = act.concat(extra);
+    $('participants').innerHTML = list.length
+      ? list.map((m) => `<label class="chip"><input type="checkbox" value="${esc(m.id)}" ${selected.has(m.id) ? 'checked' : ''} ${canWrite ? '' : 'disabled'}><span>${esc(m.name)}</span></label>`).join('')
+      : '<span class="hint" style="margin:0">还没有成员，这笔消费只扣总余额。在上面「成员余额」里添加同事后就能按人分摊。</span>';
+    const custom = splitMode() === 'custom' && list.length > 0;
+    $('customRows').hidden = !custom;
+    if (custom) {
+      $('customRows').innerHTML = list.filter((m) => selected.has(m.id)).map((m) => `
+        <label class="custom-row"><span>${esc(m.name)}</span>
+        <input type="number" step="0.01" min="0" inputmode="decimal" data-custom="${esc(m.id)}" value="${esc(customAmounts[m.id] || '')}" placeholder="0.00" aria-label="${esc(m.name)} 的金额"></label>`).join('')
+        || '<span class="hint" style="margin:0">先勾选谁吃了</span>';
+      syncCustomTotal();
+    }
+    updatePreview();
+  }
+
+  function syncCustomTotal() {
+    let sum = 0;
+    selected.forEach((id) => { const v = toCents(customAmounts[id] || '0'); if (Number.isFinite(v) && v > 0) sum += v; });
+    $('txAmount').value = sum ? (sum / 100).toFixed(2) : '';
+  }
+
+  function updatePreview() {
+    const el = $('splitPreview');
+    if (txType() !== 'expense' || splitMode() !== 'equal' || !selected.size) { el.textContent = ''; return; }
+    const total = toCents($('txAmount').value);
+    if (!Number.isFinite(total) || total <= 0) { el.textContent = `${selected.size} 人平均分摊`; return; }
+    const shares = Object.values(splitEqual(total, [...selected]));
+    const lo = Math.min(...shares), hi = Math.max(...shares);
+    el.textContent = `${selected.size} 人平均分摊，每人 ${fmt(lo)}${hi !== lo ? ' ~ ' + fmt(hi) : ''}`;
+  }
+
+  document.querySelectorAll('input[name="txType"], input[name="splitMode"]').forEach((r) => r.addEventListener('change', updateTypeFields));
+  $('participants').addEventListener('change', (e) => {
+    const cb = e.target.closest('input[type="checkbox"]'); if (!cb) return;
+    if (cb.checked) selected.add(cb.value); else selected.delete(cb.value);
+    renderParticipants();
+  });
+  $('selAll').addEventListener('click', () => { activeMembers().forEach((m) => selected.add(m.id)); renderParticipants(); });
+  $('selNone').addEventListener('click', () => { selected.clear(); renderParticipants(); });
+  $('customRows').addEventListener('input', (e) => {
+    const inp = e.target.closest('[data-custom]'); if (!inp) return;
+    customAmounts[inp.dataset.custom] = inp.value; syncCustomTotal();
+  });
+  $('txAmount').addEventListener('input', updatePreview);
+  $('txDate').addEventListener('input', () => { dateDirty = true; });
+  $('quickNotes').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-note]'); if (b) { $('txNote').value = b.dataset.note; $('txAmount').focus(); }
+  });
+
+  function resetForm() {
+    $('txAmount').value = ''; $('txNote').value = '';
+    Object.keys(customAmounts).forEach((k) => delete customAmounts[k]);
+    if (!dateDirty) $('txDate').value = today();
+    updateTypeFields();
+  }
+
+  function startEdit(t) {
+    editingId = t.id;
+    $('editBanner').hidden = false; $('formTitle').textContent = '修改记录'; $('saveTx').textContent = '保存修改';
+    (t.type === 'deposit' ? $('typeDeposit') : $('typeExpense')).checked = true;
+    $('txDate').value = t.date; dateDirty = true;
+    $('txNote').value = t.note || '';
+    Object.keys(customAmounts).forEach((k) => delete customAmounts[k]);
+    if (t.type === 'deposit') {
+      renderMembers(); $('txMember').value = t.member || '';
+      if (t.member && !$('txMember').value && memberById(t.member)) {
+        $('txMember').insertAdjacentHTML('beforeend', `<option value="${esc(t.member)}">${esc(memberName(t.member))}</option>`);
+        $('txMember').value = t.member;
+      }
+    } else {
+      selected = new Set(Object.keys(t.shares || {}));
+      const custom = t.split === 'custom';
+      (custom ? $('splitCustom') : $('splitEqual')).checked = true;
+      if (custom) Object.entries(t.shares || {}).forEach(([k, v]) => { customAmounts[k] = (v / 100).toFixed(2); });
+    }
+    updateTypeFields();
+    $('txAmount').value = (t.amount / 100).toFixed(2);
+    updatePreview();
+    $('txForm').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+  }
+  function cancelEdit() {
+    if (!editingId) return;
+    editingId = null; dateDirty = false;
+    $('editBanner').hidden = true; $('formTitle').textContent = '记一笔'; $('saveTx').textContent = '保存';
+    $('splitEqual').checked = true;
+    resetForm();
+  }
+  $('cancelEdit').addEventListener('click', cancelEdit);
+
+  const txSummary = (t) => `${t.type === 'deposit' ? '存入' : '消费'} ${fmt(t.amount)}${t.note ? ' · ' + t.note : ''} · ${t.date}`;
+
+  $('txForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const type = txType();
+    const date = $('txDate').value || today();
+    const note = $('txNote').value.trim().slice(0, 50);
+    const hasMembers = activeMembers().length > 0;
+    const doc = { type, date, note };
+
+    if (type === 'deposit') {
+      const amount = toCents($('txAmount').value);
+      if (!Number.isFinite(amount) || amount <= 0) { toast('请输入大于 0 的金额'); return; }
+      const member = $('txMember').value;
+      if (hasMembers && !member) { toast('请选择是谁存的钱'); return; }
+      Object.assign(doc, { amount, member: member || null });
+    } else {
+      const ids = [...selected].filter((id) => memberById(id));
+      if (hasMembers && !ids.length) { toast('请勾选谁吃了'); return; }
+      if (ids.length && splitMode() === 'custom') {
+        const shares = {};
+        for (const id of ids) {
+          const v = toCents(customAmounts[id] || '');
+          if (!Number.isFinite(v) || v <= 0) { toast(`请填写 ${memberName(id)} 的金额`); return; }
+          shares[id] = v;
+        }
+        Object.assign(doc, { amount: Object.values(shares).reduce((a, b) => a + b, 0), shares, split: 'custom' });
+      } else {
+        const amount = toCents($('txAmount').value);
+        if (!Number.isFinite(amount) || amount <= 0) { toast('请输入大于 0 的金额'); return; }
+        Object.assign(doc, { amount, shares: ids.length ? splitEqual(amount, ids) : {}, split: 'equal' });
+      }
+    }
+    if (doc.amount > 10000000) { toast('金额太大了，检查一下'); return; }
+
+    $('saveTx').disabled = true;
+    let ok;
+    if (editingId) {
+      const orig = txs.find((t) => t.id === editingId);
+      if (!orig) { toast('这条记录已经不存在了'); cancelEdit(); $('saveTx').disabled = !canWrite; return; }
+      const prev = { type: orig.type, amount: orig.amount, date: orig.date, note: orig.note || '', member: orig.member || null, shares: orig.shares || {}, split: orig.split || null, at: Date.now(), by: myId };
+      const next = Object.assign(clone(orig), doc, { updatedAt: Date.now(), updatedBy: myId, history: (orig.history || []).concat([prev]).slice(-20) });
+      delete next.id;
+      if (doc.type === 'deposit') { delete next.shares; delete next.split; } else delete next.member;
+      const id = editingId;
+      ok = await write(() => db.doc('transactions/' + id).set(next));
+      if (ok) {
+        addLog('edit', `修改：${txSummary(orig)} → ${txSummary(next)}`, id);
+        toast('已保存修改');
+        cancelEdit();
+      }
+    } else {
+      Object.assign(doc, { created: Date.now(), by: myId });
+      const ref = db.collection('transactions').doc();
+      ok = await write(() => ref.set(doc));
+      if (ok) {
+        addLog('add', `新增：${txSummary(doc)}`, ref.id);
+        toast(`已记录：${type === 'deposit' ? '存入' : '消费'} ${fmt(doc.amount)}`);
+        dateDirty = false; resetForm();
+      }
+    }
+    $('saveTx').disabled = !canWrite;
+  });
+
+  // ---------- 流水 ----------
   let renderSeq = 0;
   async function renderLedger() {
     const seq = ++renderSeq;
-    const list = txs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0));
-    const bal = list.reduce((s, t) => s + (t.type === 'deposit' ? t.amount : -t.amount), 0);
+    const live = txs.filter((t) => !t.deleted);
+    const bal = live.reduce((s, t) => s + (t.type === 'deposit' ? t.amount : -t.amount), 0);
     $('balance').textContent = fmt(bal);
     $('balance').classList.toggle('neg', bal < 0);
 
-    const exp = list.filter((t) => t.type === 'expense');
+    const exp = live.filter((t) => t.type === 'expense');
     const spent = exp.reduce((s, t) => s + t.amount, 0);
     const days = new Set(exp.map((t) => t.date)).size;
     const avg = days ? spent / days : 0;
     const sub = $('balanceSub');
     sub.classList.toggle('warn', bal < 0 || (avg > 0 && bal < avg * 3));
     if (!loaded.t) sub.textContent = '加载中……';
-    else if (!list.length) sub.textContent = '还没有记录';
+    else if (!live.length) sub.textContent = '还没有记录';
     else if (bal < 0) sub.textContent = `已透支 ${fmt(-bal)}，该补钱了`;
     else if (avg > 0) sub.textContent = `日均 ${fmt(Math.round(avg))}，大约还够 ${Math.floor(bal / avg)} 天`;
     else sub.textContent = '还没有消费记录';
 
-    const deposited = list.filter((t) => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
+    const deposited = live.filter((t) => t.type === 'deposit').reduce((s, t) => s + t.amount, 0);
     const month = today().slice(0, 7);
     const monthSpent = exp.filter((t) => t.date.startsWith(month)).reduce((s, t) => s + t.amount, 0);
-    $('stats').innerHTML = list.length ? `<span>累计存入 <b>${fmt(deposited)}</b></span><span>累计消费 <b>${fmt(spent)}</b></span><span>本月消费 <b>${fmt(monthSpent)}</b></span>` : '';
+    const { unassigned } = computeBalances();
+    $('stats').innerHTML = live.length ? `<span>累计存入 <b>${fmt(deposited)}</b></span><span>累计消费 <b>${fmt(spent)}</b></span><span>本月消费 <b>${fmt(monthSpent)}</b></span>`
+      + (unassigned ? `<span>未分到人 <b>${fmt(unassigned)}</b></span>` : '') : '';
 
-    const ids = [...new Set(list.map((t) => t.by).filter(Boolean))];
-    const ps = user && ids.length ? await user.profiles(ids) : {};
+    const fm = $('filterMember').value;
+    const showDel = $('showDeleted').checked;
+    const list = txs.filter((t) => (showDel || !t.deleted) && (!fm || t.member === fm || (t.shares && fm in t.shares)))
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.created || 0) - (a.created || 0));
+
+    const nm = await names(list.flatMap((t) => [t.by, t.updatedBy, t.deletedBy]));
     if (seq !== renderSeq) return;
 
     const dayTotals = {};
@@ -478,52 +903,89 @@ details.backup summary { cursor: pointer; }
     let html = '', last = null;
     for (const t of list) {
       if (t.date !== last) {
-        html += `<li class="day"><span>${esc(t.date)}</span><span>${dayTotals[t.date] ? '当天消费 ' + fmt(dayTotals[t.date]) : ''}</span></li>`;
+        html += `<li class="day"><span>${esc(t.date)}</span><span>${!fm && dayTotals[t.date] ? '当天消费 ' + fmt(dayTotals[t.date]) : ''}</span></li>`;
         last = t.date;
       }
-      const who = t.by && ps[t.by] && ps[t.by].name;
-      html += `<li>
-        <div class="tx-main"><span class="tx-note">${esc(t.note || (t.type === 'deposit' ? '存入' : '消费'))}</span>
-          ${who ? `<span class="tx-by">${esc(who)} 记录</span>` : ''}</div>
-        <div class="tx-right"><span class="amt ${t.type === 'deposit' ? 'deposit' : 'expense'}">${t.type === 'deposit' ? '+' : '-'}${fmt(t.amount)}</span>
-          ${canWrite ? `<button class="del" data-id="${esc(t.id)}" aria-label="删除这条记录">删除</button>` : ''}</div>
+      const dep = t.type === 'deposit';
+      const shares = t.shares || {};
+      const pids = Object.keys(shares);
+      let who;
+      if (dep) who = t.member ? `${memberName(t.member)} 存入` : '存入（未指定成员）';
+      else if (!pids.length) who = '未分到人';
+      else if (t.split === 'custom') who = pids.map((id) => `${memberName(id)} ${fmt(shares[id])}`).join('、');
+      else who = `${pids.map(memberName).join('、')}${pids.length > 1 ? ` · 每人约 ${fmt(Math.round(t.amount / pids.length))}` : ''}`;
+      const meta = [];
+      if (nm[t.by]) meta.push(`${nm[t.by]} 记录`);
+      if (t.updatedAt) meta.push(`${nm[t.updatedBy] || '有人'} 修改过`);
+      if (t.deleted) meta.push(`${nm[t.deletedBy] || '有人'} 已删除`);
+      const mine = fm && !dep && shares[fm] != null && pids.length > 1 ? `<span class="amt-sub">${esc(memberName(fm))} 分摊 ${fmt(shares[fm])}</span>` : '';
+      const actions = !canManage(t) ? '' : t.deleted
+        ? `<button class="link" data-act="restore" data-id="${esc(t.id)}">恢复</button>`
+        : `<button class="link" data-act="edit" data-id="${esc(t.id)}">编辑</button><button class="link danger" data-act="delete" data-id="${esc(t.id)}">删除</button>`;
+      html += `<li class="${t.deleted ? 'deleted' : ''}">
+        <div class="tx-main">
+          <span class="tx-note">${esc(t.note || (dep ? '存入' : '消费'))}</span>
+          <span class="tx-sub">${esc(who)}</span>
+          ${meta.length ? `<span class="tx-sub">${esc(meta.join(' · '))}</span>` : ''}
+        </div>
+        <div class="tx-right">
+          <span class="amt ${dep ? 'deposit' : 'expense'}">${dep ? '+' : '-'}${fmt(t.amount)}</span>
+          ${mine}
+          ${actions ? `<div class="tx-actions">${actions}</div>` : ''}
+        </div>
       </li>`;
     }
     $('txList').innerHTML = !loaded.t ? '<li class="empty">加载中……</li>' : html;
     $('txEmpty').hidden = !loaded.t || list.length > 0;
+    $('txEmpty').textContent = fm || showDel ? '没有符合条件的记录。' : '还没有记录。先记一笔「存入」，再记每天的消费。';
   }
 
-  $('txDate').value = today();
-  $('quickNotes').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-note]'); if (b) { $('txNote').value = b.dataset.note; $('txAmount').focus(); }
-  });
+  $('filterMember').addEventListener('change', renderLedger);
+  $('showDeleted').addEventListener('change', renderLedger);
 
-  $('txForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const amount = toCents($('txAmount').value);
-    if (!Number.isFinite(amount) || amount <= 0) { toast('请输入大于 0 的金额'); return; }
-    if (amount > 10000000) { toast('金额太大了，检查一下'); return; }
-    const type = document.querySelector('input[name="txType"]:checked').value;
-    const doc = { type, amount, date: $('txDate').value || today(), note: $('txNote').value.trim().slice(0, 50), created: Date.now(), by: myId };
-    $('saveTx').disabled = true;
-    const ok = await write(() => db.collection('transactions').add(doc));
-    $('saveTx').disabled = !canWrite;
-    if (ok) {
-      $('txAmount').value = ''; $('txNote').value = '';
-      toast(`已记录：${type === 'deposit' ? '存入' : '消费'} ${fmt(amount)}`);
+  $('txList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]'); if (!b) return;
+    const t = txs.find((x) => x.id === b.dataset.id); if (!t || !canManage(t)) return;
+    if (b.dataset.act === 'edit') startEdit(t);
+    if (b.dataset.act === 'delete') {
+      armOrRun(b, '确认删除', async () => {
+        if (await write(() => db.doc('transactions/' + t.id).update({ deleted: true, deletedAt: Date.now(), deletedBy: myId }))) {
+          addLog('delete', `删除：${txSummary(t)}`, t.id);
+          if (editingId === t.id) cancelEdit();
+        }
+      });
+    }
+    if (b.dataset.act === 'restore') {
+      write(() => db.doc('transactions/' + t.id).update({ deleted: false })).then((ok) => ok && addLog('restore', `恢复：${txSummary(t)}`, t.id));
     }
   });
 
-  $('txList').addEventListener('click', (e) => {
-    const btn = e.target.closest('.del'); if (!btn) return;
-    armOrRun(btn, '确认删除', () => write(() => db.doc('transactions/' + btn.dataset.id).delete()));
-  });
+  // ---------- 操作记录 ----------
+  let logSeq = 0;
+  async function renderLog() {
+    const seq = ++logSeq;
+    const nm = await names(logs.map((l) => l.by));
+    if (seq !== logSeq) return;
+    $('logList').innerHTML = logs.map((l) => {
+      const d = new Date(l.at);
+      const when = `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+      return `<li><time>${when}</time><span><span class="who">${esc(nm[l.by] || '有人')}</span>
+        <span class="${l.action === 'delete' ? 'act-delete' : ''}">${esc(l.summary)}</span></span></li>`;
+    }).join('');
+    $('logEmpty').hidden = !loaded.l || logs.length > 0;
+  }
 
   // ---------- 备份 / 导入 ----------
   $('copyBackup').addEventListener('click', () => {
     const data = JSON.stringify({
+      version: 2,
+      members: members.map((m) => ({ id: m.id, name: m.name, active: m.active !== false })),
       restaurants: restaurants.map((r) => ({ name: r.name })),
-      transactions: txs.map(({ type, amount, date, note, created }) => ({ type, amount, date, note, created })),
+      transactions: txs.filter((t) => !t.deleted).map((t) => {
+        const o = { type: t.type, amount: t.amount, date: t.date, note: t.note || '', created: t.created };
+        if (t.type === 'deposit') o.member = t.member || null; else { o.shares = t.shares || {}; o.split = t.split || 'equal'; }
+        return o;
+      }),
     }, null, 2);
     const ta = $('backupText'); ta.value = data; ta.hidden = false;
     const fallback = () => { ta.focus(); ta.select(); toast('已选中全部数据，按 Ctrl/⌘ + C 复制'); };
@@ -539,32 +1001,69 @@ details.backup summary { cursor: pointer; }
     reader.onload = () => {
       let data;
       try { data = JSON.parse(reader.result); } catch (err) { toast('文件不是有效的 JSON'); return; }
-      if (!data || !Array.isArray(data.restaurants) || !Array.isArray(data.transactions)) { toast('文件格式不对，需要包含 restaurants 和 transactions'); return; }
-      const existing = new Set(restaurants.map((r) => r.name));
-      const rs = [...new Set(data.restaurants.map((r) => String(r && r.name || '').trim().slice(0, 30)).filter((n) => n && !existing.has(n)))];
+      if (!data || !Array.isArray(data.transactions)) { toast('文件格式不对，需要包含 transactions'); return; }
+      const fileMembers = Array.isArray(data.members) ? data.members.filter((m) => m && m.id && String(m.name || '').trim()) : [];
+      const haveR = new Set(restaurants.map((r) => r.name));
+      const rs = [...new Set((data.restaurants || []).map((r) => String((r && r.name) || '').trim().slice(0, 30)).filter((n) => n && !haveR.has(n)))];
       const ts = data.transactions.filter((t) => t && (t.type === 'deposit' || t.type === 'expense') && Number.isInteger(t.amount) && t.amount > 0 && /^\d{4}-\d{2}-\d{2}$/.test(t.date));
+      const newMembers = fileMembers.filter((m) => !members.some((x) => x.name === String(m.name).trim().slice(0, 20)));
       const box = $('importConfirm');
-      box.innerHTML = `<span>将追加 ${rs.length} 家饭店、${ts.length} 条流水到共享数据。</span>
+      box.innerHTML = `<span>将追加 ${newMembers.length} 位成员、${rs.length} 家饭店、${ts.length} 条流水。</span>
         <button type="button" class="btn" id="doImport">确认导入</button><button type="button" class="ghost" id="cancelImport">取消</button>`;
       box.hidden = false;
       $('cancelImport').onclick = () => { box.hidden = true; };
       $('doImport').onclick = async () => {
         box.innerHTML = '<span>导入中……</span>';
-        let done = 0;
+        const idMap = {};
+        for (const m of fileMembers) {
+          const name = String(m.name).trim().slice(0, 20);
+          const found = members.find((x) => x.name === name);
+          if (found) { idMap[m.id] = found.id; continue; }
+          const ref = db.collection('members').doc();
+          if (!(await write(() => ref.set({ name, active: m.active !== false, createdAt: Date.now(), by: myId })))) { box.hidden = true; return; }
+          idMap[m.id] = ref.id;
+        }
         for (const name of rs) { if (!(await write(() => db.collection('restaurants').add({ name, createdAt: Date.now(), by: myId })))) break; }
+        let done = 0;
         for (const t of ts) {
-          const ok = await write(() => db.collection('transactions').add({ type: t.type, amount: t.amount, date: t.date, note: String(t.note || '').slice(0, 50), created: Number(t.created) || Date.now(), by: myId }));
-          if (!ok) break; done++;
+          const doc = { type: t.type, amount: t.amount, date: t.date, note: String(t.note || '').slice(0, 50), created: Number(t.created) || Date.now(), by: myId };
+          if (t.type === 'deposit') doc.member = (t.member && idMap[t.member]) || null;
+          else {
+            const shares = {};
+            Object.entries(t.shares || {}).forEach(([k, v]) => { if (idMap[k] && Number.isInteger(v) && v > 0) shares[idMap[k]] = v; });
+            const sum = Object.values(shares).reduce((a, b) => a + b, 0);
+            doc.shares = sum === t.amount ? shares : {};
+            doc.split = t.split === 'custom' ? 'custom' : 'equal';
+          }
+          if (!(await write(() => db.collection('transactions').add(doc)))) break;
+          done++;
         }
         box.hidden = true;
-        toast(`导入完成：${rs.length} 家饭店，${done} 条流水`);
+        addLog('import', `导入 ${newMembers.length} 位成员、${rs.length} 家饭店、${done} 条流水`);
+        toast(`导入完成：${done} 条流水`);
       };
     };
     reader.readAsText(file);
   });
 
-  // ---------- 连接共享数据 ----------
-  renderRestaurants(); renderLedger();
+  // ---------- 渲染与连接 ----------
+  function renderAll() { renderRestaurants(); renderMembers(); renderParticipants(); renderLedger(); renderLog(); renderPick(); }
+  $('txDate').value = today();
+  updateTypeFields();
+  renderAll();
+
+  // 跨天：页面一直开着时，第二天自动切换「今日抽中」和默认日期
+  function checkDay() {
+    const d = today();
+    if (d === curDay) return;
+    curDay = d;
+    if (!dateDirty && !editingId) $('txDate').value = d;
+    $('result').textContent = '';
+    if (db) subscribePick();
+    renderLedger();
+  }
+  setInterval(checkDay, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(); });
 
   async function start() {
     if (!window.claude || typeof window.claude.use !== 'function') {
@@ -576,32 +1075,43 @@ details.backup summary { cursor: pointer; }
     user = await window.claude.use('user');
     if (user) {
       myId = await user.id();
+      isAdmin = await user.canEdit();
       const w = await user.can('data.write');
       if (w === false) { setWritable(false); setStatus('你现在只能查看。需要记账或改列表，请找分享者把你设为可编辑。'); }
     }
-    let gotR = false, gotT = false;
-    const fresh = () => { if (gotR && gotT) { clearTimeout(slow); if (canWrite) setStatus(''); } };
+    const got = {};
+    const fresh = (k, s) => { if (!s.metadata.fromCache) got[k] = true; if (got.r && got.m && got.t) { clearTimeout(slow); if (canWrite) setStatus(''); } };
     const onErr = (e) => { clearTimeout(slow); if (e && e.code !== 'revoked') setStatus('共享数据连接断开了，刷新页面试试。', true); };
 
     db.collection('restaurants').onSnapshot((s) => {
       restaurants = s.docs.map((d) => Object.assign({ id: d.id }, d.data())).filter((r) => r.name)
         .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
-      loaded.r = true; renderRestaurants(); renderPick();
-      if (!s.metadata.fromCache) { gotR = true; fresh(); }
+      loaded.r = true; renderRestaurants(); renderPick(); fresh('r', s);
+    }, onErr);
+
+    db.collection('members').onSnapshot((s) => {
+      members = s.docs.map((d) => Object.assign({ id: d.id }, d.data())).filter((m) => m.name)
+        .sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+      // 第一次加载时默认全选在职成员
+      if (!selectionInit && members.length) { activeMembers().forEach((m) => selected.add(m.id)); selectionInit = true; }
+      loaded.m = true; renderMembers(); updateTypeFields(); renderLedger(); fresh('m', s);
     }, onErr);
 
     db.collection('transactions').onSnapshot((s) => {
       txs = s.docs.map((d) => Object.assign({ id: d.id }, d.data()))
         .filter((t) => Number.isFinite(t.amount) && typeof t.date === 'string');
-      loaded.t = true; renderLedger();
-      if (!s.metadata.fromCache) { gotT = true; fresh(); }
+      loaded.t = true; renderMembers(); renderLedger(); fresh('t', s);
     }, onErr);
 
-    db.doc('picks/' + today()).onSnapshot((d) => { pick = d.exists ? d.data() : null; renderPick(); }, () => {});
+    db.collection('log').orderBy('at', 'desc').limit(50).onSnapshot((s) => {
+      logs = s.docs.map((d) => d.data()).filter((l) => l && l.at);
+      loaded.l = true; renderLog();
+    }, () => {});
+
+    subscribePick();
   }
   start();
 
-  // 主题切换时重绘转盘空状态
   if (window.matchMedia) matchMedia('(prefers-color-scheme: dark)').addEventListener('change', drawWheel);
 })();
 </script>

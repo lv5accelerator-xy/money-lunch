@@ -258,6 +258,19 @@
 
   $('txDate').value = today();
 
+  // 页面一直开着时，过了午夜自动把默认日期换成新的一天（用户手动改过日期则不动）
+  let curDay = today(), dateDirty = false;
+  $('txDate').addEventListener('input', () => { dateDirty = true; });
+  function checkDay() {
+    const d = today();
+    if (d === curDay) return;
+    curDay = d;
+    if (!dateDirty) $('txDate').value = d;
+    renderLedger();
+  }
+  setInterval(checkDay, 60 * 1000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) checkDay(); });
+
   $('txForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const amount = toCents($('txAmount').value);
@@ -273,6 +286,7 @@
     });
     $('txAmount').value = '';
     $('txNote').value = '';
+    dateDirty = false; $('txDate').value = today();
     save(); renderLedger();
   });
 
